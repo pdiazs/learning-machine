@@ -1,0 +1,111 @@
+---
+title: "Human Activity Recognition"
+author: "pds"
+date: "Tuesday, July 22, 2014"
+output: html_document
+---
+
+In this exercise we have worked on the analysis of individual exercise behavior based on the data captured by personal devices such as Jawbone Up, Nike FuelBand, and Fitbit.  In this project, our goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: 
+http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+The purpose of this exercise is to predict the kind of exercise performed according with the recorded measures.
+We start downloafing the training and test databases from:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The code assumes that the data are available in the working directory. We face the problem that as far as the exercise does not produce a standard test sample, we need to calibrate with a resampling of the training set proposed, then the analysis is repeated with the actual training test division proposed.
+
+The process is 
+a) Load the required packages
+b) Load the data
+c) Build the global set.
+d) Eliminate blank and NA data
+e) Randomize and normalize data to avoid scale effects
+f) Divide initial training set in training and test subset
+g) Apply knn model to training set and check accuracy of prediction with the test set
+h) Repeat the process with the global training set and create prediction for the 20 rows test set (whose accuracy cannot be checked)
+  The process is made with knn, decision trees and naiveBayes algorithm to get comparable results
+
+
+```{r}
+library("class", lib.loc="C:/Program Files/R/R-3.1.1/library")
+library("gmodels", lib.loc="C:/Program Files/R/R-3.1.1/library")
+library("C50", lib.loc="C:/Program Files/R/R-3.1.1/library")
+library("e1071", lib.loc="C:/Program Files/R/R-3.1.1/library")
+pml.training <- read.csv("D:/Users/Pedro/Downloads/pml-training.csv",stringsAsFactors=FALSE, header=TRUE)
+pml.testing <- read.csv("D:/Users/Pedro/Downloads/pml-testing.csv",stringsAsFactors=FALSE,header=TRUE)
+normalize<-function(x){
+  return((x-min(x))/(max(x)-min(x)))
+}
+mtrain<-nrow(pml.training)
+ntrain<-ncol(pml.training)
+mtest<-nrow(pml.testing)
+pml<-rbind(pml.training[1:159],pml.testing[1:159])
+pml <- pml[,colSums(is.na(pml))< 0.95*nrow(pml)]
+coltokill<-c(1:7,12:20,43:48,52:60,74:82)
+pml<-pml[,-coltokill]
+m<-ncol(pml)
+pml.training_cl<-pml[1:19622,]
+pml.training_cl[,m+1]<-pml.training[,160]
+pml.testing_cl<-pml[19623:19642,]
+# pml.testing_cl[],pml.training[19623:19642,160])
+pml.total<-rbind(pml[1:19622,],pml[19623:19642,])
+pml.total_nr<-as.data.frame(lapply(pml.total[,1:m],normalize))
+pml.total_def<-pml.total_nr[1:19622,]
+pml.total_lb<-cbind(pml.total_def, pml.training[,160])
+set.seed(123456)
+pml.training_randnn<-pml.training_cl[order(runif(19622)),]
+pml.training_rand<-as.data.frame(lapply(pml.training_randnn[,1:m],normalize))
+# pml.total.rand<-pml.total_lb[order(runif(19622)),]
+pmltl.tr<-pml.training_rand[1:15698,1:m]
+pmltl.ts<-pml.training_rand[15699:19622,1:m]
+class_label_tr<-as.factor(pml.training_randnn[1:15698,m+1])
+class_label_ts<-as.factor(pml.training_randnn[15699:19622,m+1])
+
+```
+
+The problem with knn is the determination of the number of k close neighbours to be considered. If we check nearest neighbour algoritm we find that the best results are obtained with k=1, obtainning more than 95 accuracy in all the prediction clearly overfitting the sample. If we calculate with sqrt of sample number and obain the following result the accuracy is much smaller.
+
+```{r, echo=TRUE}
+pml.pred<-knn(train=pmltl.tr, test=pmltl.ts, cl=class_label_tr, k=1)
+summary(pml.pred)
+CrossTable(x=class_label_ts, y=pml.pred, prop.chisq=FALSE)
+pml.pred<-knn(train=pmltl.tr, test=pmltl.ts, cl=class_label_tr, k=125)
+summary(pml.pred)
+CrossTable(x=class_label_ts, y=pml.pred, prop.chisq=FALSE)
+
+```
+
+Assuming the best accuracy model although it is overfitting the sample we get consistent predictions (we are not working with the recomended ratio sampling-testing )
+
+```{r, echo=TRUE}
+pmltl.tr2<-pml.total_lb[1:19622,1:m]
+pmltl.ts2<-pml.total_nr[19623:19642,1:m]
+class_label_tr2<-as.factor(pml.total_lb[1:19622,m+1])
+# class_label_ts2<-as.factor(pml.training_randnn[19623:19642,m+1])
+pml.pred2<-knn(train=pmltl.tr2, test=pmltl.ts2, cl=class_label_tr2, k=1)
+pml.pred2
+```
+
+As a complementary analysis, we develop decission tree analysis with C5.0 package
+
+```{r, echo=TRUE}
+pml.pred.dt<-C5.0(x=pml.training_cl[-53], y=as.factor(pml.training_cl$V53), trials=1, costs=NULL)
+pml.pred.dt
+predi.dt<-predict(pml.pred.dt, pml.testing_cl)
+predi.dt
+```
+
+and with naive Bayes algorithm 
+
+```{r, echo=TRUE}
+pml.pred.nB<-naiveBayes(pml.training_cl[-53],as.factor(pml.training_cl$V53),laplace=0)
+predi.nB<-predict(pml.pred.nB, pml.testing_cl, type="class")
+predi.nB
+```
+
+## Conclusions
+
+we have obtained three different predictions and the results show to be  unconsistent probably due to the dataset distribution and overidentification of signal
