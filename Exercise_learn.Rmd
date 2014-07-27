@@ -108,4 +108,4 @@ predi.nB
 
 ## Conclusions
 
-we have obtained three different predictions and the results show to be  unconsistent probably due to the dataset distribution and overidentification of signal
+we have obtained three different predictions and the results show to be  unconsistent probably due to the dataset distribution and overidentification of signal. Nevertheless the knn algorithm results best suit to the results
